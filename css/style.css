@@ -167,6 +167,9 @@ html, body {
      中身が4:3に収まらない画面でだけ縦に伸びる
      （4:3のまま押し込めると文字とボタンが小さくなりすぎるため）。
      伸びるのは残りの高さまでで、それ以上は本文側がスクロールする */
+  /* 明細が増えても画面の大きさを変えたくない画面は .fit を付ける。
+     伸びるかわりに中の一覧がスクロールする */
+  #screen.fit { min-height: 0; }
   #screen {
     flex: 0 0 auto;
     aspect-ratio: 4 / 3;
@@ -176,7 +179,7 @@ html, body {
 }
 @media (min-width: 600px) and (min-height: 820px) {
   #base { display: block; }
-  #stage { --reserve: 290px; }   /* レジ台を出す分だけ余計に確保する */
+  #stage { --reserve: 300px; }   /* レジ台を出す分だけ余計に確保する */
 }
 
 /* 画面を4:3に固定すると縦が足りなくなるので、タブレットでは各部を少し詰める */
@@ -195,7 +198,6 @@ html, body {
   .coin { width: 56px; height: 56px; font-size: .85rem; }
   .keypad { max-width: 252px; gap: 6px; }
   .keypad .btn { min-height: 44px; font-size: 1.2rem; }
-  .shelf { min-height: 88px; }
   .lines { min-height: 56px; }
   .band { padding: 8px 18px; margin-top: 10px; }
   .receipt { max-height: 180px; }
@@ -347,8 +349,6 @@ html, body {
 .band .am { margin-left: auto; font-size: clamp(1.6rem, 4.5vw, 2.3rem); font-weight: 900; }
 
 /* ===== スキャン画面 ===== */
-.scan-wrap { display: grid; grid-template-columns: minmax(0,1fr) 300px; gap: 12px; flex: 1; min-height: 0; }
-@media (max-width: 700px) { .scan-wrap { grid-template-columns: 1fr; } }
 .panel {
   background: rgba(255,255,255,.72);
   border: 1px solid var(--line);
@@ -360,23 +360,9 @@ html, body {
   font-weight: 700; font-size: .92rem; color: #27405c;
   border-bottom: 1px solid var(--line); padding-bottom: 6px; margin-bottom: 8px;
 }
-.shelf {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  gap: 8px; overflow-y: auto; flex: 1; min-height: 120px; align-content: start;
-}
-.item {
-  font-family: inherit; cursor: pointer;
-  background: #fff; border: 1px solid var(--line); border-radius: 4px;
-  padding: 8px 4px; min-height: 102px;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-}
-.item:hover { background: #fffbe8; border-color: var(--or2); }
-.item:active { transform: translateY(1px); }
-.item.scanned { opacity: .32; }
-.item .ico { font-size: 1.8rem; }
-.item .nm { font-size: .74rem; font-weight: 700; text-align: center; }
-.item .pr { font-size: .8rem; font-weight: 800; color: #c0392b; }
-.item .bc { font-size: .53rem; color: var(--gray); font-family: ui-monospace, monospace; }
+.scan-panel { flex: 1; min-height: 0; }
+.nb-block { margin-top: 12px; }
+.nb-ttl { font-weight: 700; font-size: .92rem; color: #27405c; margin-bottom: 6px; }
 
 .nb-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
 .nb-btn {
@@ -607,3 +593,31 @@ body.app-mode #stage { display: none; }
   border-radius: 6px; min-height: 46px; padding: 0 10px; font-weight: 700;
 }
 .set-del:hover { background: #55262f; }
+
+/* ===== 商品の絵（写真 or 絵文字） ===== */
+.pic {
+  width: 34px; height: 34px; flex: 0 0 auto;
+  border-radius: 6px; object-fit: cover;
+  display: inline-grid; place-items: center;
+  background: #fff; border: 1px solid var(--line);
+}
+.pic.emoji { font-size: 1.2rem; border-color: transparent; background: transparent; }
+.pic.sm { width: 28px; height: 28px; }
+.pic.sm.emoji { font-size: 1.1rem; }
+.cam-list .pic { width: 26px; height: 26px; }
+
+/* 設定画面の写真欄 */
+.set-img { grid-column: span 2; }
+@media (max-width: 560px) { .set-img { grid-column: span 1; } }
+.img-row { display: flex; align-items: center; gap: 8px; }
+.img-prev .pic { width: 46px; height: 46px; border-color: #3a4a5e; background: #0f1821; }
+.img-prev .pic.emoji { font-size: 1.6rem; background: #0f1821; }
+.img-btns { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.img-pick, .img-clear {
+  font-family: inherit; font-size: .8rem; font-weight: 700; cursor: pointer;
+  background: #0f1821; color: #cfe0f0; border: 1px solid #3a4a5e;
+  border-radius: 6px; padding: 7px 10px; text-align: center; white-space: nowrap;
+}
+.img-pick:hover, .img-clear:hover { background: #17222e; }
+.img-pick:focus-within { outline: 2px solid #ffd84d; outline-offset: 1px; }
+.img-clear { color: #ff9a92; border-color: #6b3a44; }

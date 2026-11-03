@@ -30,6 +30,7 @@
   .card.majica { border-color: #d8251b; border-style: solid; }
   .card .no { font-size: 8pt; font-weight: 800; color: #666; letter-spacing: .06em; }
   .card .icon { font-size: 19pt; line-height: 1.1; }
+  .card .icon img { width: 15mm; height: 15mm; object-fit: cover; border-radius: 2mm; display: block; margin: 0 auto; }
   .card .name { font-size: 10.5pt; font-weight: 700; margin-top: .5mm; word-break: break-word; }
   .card .kana { font-size: 7.5pt; color: #555; }
   .card .price { font-size: 13pt; font-weight: 800; color: #c0392b; margin: .8mm 0 1.6mm; }
@@ -96,12 +97,12 @@
   var items = loadItems();   // js/data.js が設定を読んでくれる
 
   var cards = [{
-    majica: true, no: 'majica', icon: '💳',
+    majica: true, no: 'majica', icon: '💳', img: '',
     name: 'majica カード', kana: 'さいしょに よみとる', price: null, code: 'MAJICA'
   }];
   items.forEach(function (it, i) {
     cards.push({
-      no: 'QR' + (i + 1), icon: it.icon, name: it.k, kana: it.h,
+      no: 'QR' + (i + 1), icon: it.icon, img: it.img, name: it.k, kana: it.h,
       price: it.price, code: it.id
     });
   });
@@ -109,7 +110,9 @@
   document.getElementById('grid').innerHTML = cards.map(function (c) {
     return '<div class="card' + (c.majica ? ' majica' : '') + '">' +
       '<div class="no">' + esc(c.no) + '</div>' +
-      '<div class="icon">' + esc(c.icon) + '</div>' +
+      '<div class="icon">' + (c.img
+        ? '<img src="' + esc(c.img) + '" alt="">'
+        : esc(c.icon)) + '</div>' +
       '<div class="name">' + esc(c.name) + '</div>' +
       '<div class="kana">' + esc(c.kana) + '</div>' +
       '<div class="price">' + (c.price != null ? c.price.toLocaleString('ja-JP') + '円' : '&nbsp;') + '</div>' +

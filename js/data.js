@@ -7,6 +7,8 @@
    barcode を入れておくと、本物のJANバーコードでも同じ商品が引ける
    （ブラウザ標準のBarcodeDetectorが使える端末のみ）。 */
 const ITEM_COUNT_MAX = 24;
+const IMG_SIZE = 160;          // 取り込んだ画像を縮める一辺の大きさ(px)
+const IMG_MAX_CHARS = 60000;   // 1枚あたりのデータURLの上限。localStorageを圧迫しないため
 
 const DEFAULT_ITEMS = [
   { id: 'QR1',  k: 'おにぎり ツナマヨ', h: 'おにぎり ツナマヨ',      price: 150, icon: '🍙', barcode: '4901234567890' },
@@ -30,12 +32,19 @@ function normalizeItem(raw, index) {
   const src = raw || {};
   const price = Math.max(0, Math.min(99999, Math.round(Number(src.price)) || 0));
   const k = String(src.k == null ? '' : src.k).trim().slice(0, 30) || `しょうひん${index + 1}`;
+  /* img はローカル画像を取り込んだときのデータURL。
+     容量を食うので、取り込み時に小さく作り直したものだけを入れる。
+     不正な値が紛れ込んでも描画しないよう、ここで形を確かめる */
+  const rawImg = String(src.img == null ? '' : src.img);
+  const img = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(rawImg) && rawImg.length <= IMG_MAX_CHARS
+    ? rawImg : '';
   return {
     id: `QR${index + 1}`,                        // 番号は並び順から必ず振り直す
     k,
     h: String(src.h == null ? '' : src.h).trim().slice(0, 30) || k,   // よみが空なら商品名をそのまま使う
     price,
     icon: String(src.icon == null ? '' : src.icon).trim().slice(0, 4) || '📦',
+    img,
     barcode: String(src.barcode == null ? '' : src.barcode).replace(/[^0-9]/g, '').slice(0, 14)
   };
 }
@@ -67,6 +76,34 @@ function saveItems(items) {
 function resetItems() {
   try { localStorage.removeItem(STORE_KEY); } catch (e) { /* 消せなくても初期値で続行 */ }
   return cloneDefaults();
+}
+
+/* ローカル画像を読み込んで、正方形に切り出し・縮小したデータURLを返す。
+   そのまま保存すると localStorage がすぐ一杯になるので必ず小さくする。 */
+function imageFileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    if (!file || !/^image\//.test(file.type)) { reject(new Error('NOT_IMAGE')); return; }
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      try {
+        const side = Math.min(img.naturalWidth, img.naturalHeight);   // 中央を正方形に切り出す
+        const sx = (img.naturalWidth - side) / 2;
+        const sy = (img.naturalHeight - side) / 2;
+        const cv = document.createElement('canvas');
+        cv.width = IMG_SIZE; cv.height = IMG_SIZE;
+        const ctx = cv.getContext('2d');
+        ctx.drawImage(img, sx, sy, side, side, 0, 0, IMG_SIZE, IMG_SIZE);
+        let out = cv.toDataURL('image/jpeg', 0.8);
+        if (out.length > IMG_MAX_CHARS) out = cv.toDataURL('image/jpeg', 0.6);
+        if (out.length > IMG_MAX_CHARS) { reject(new Error('TOO_BIG')); return; }
+        resolve(out);
+      } catch (e) { reject(e); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('DECODE')); };
+    img.src = url;
+  });
 }
 
 /* 読み取ったコードから商品を引く。QR番号でも本物のJANでも引ける */
@@ -211,7 +248,14 @@ const T = {
   set_kana:     { k: 'よみ（ひらがな）',        h: 'よみ（ひらがな）' },
   set_kana_ph:  { k: '空なら商品名をそのまま使います', h: 'からなら なまえを そのまま つかいます' },
   set_price:    { k: '値段',                   h: 'ねだん' },
-  set_icon:     { k: '絵',                     h: 'え' },
+  set_icon:     { k: '絵文字',                 h: 'えもじ' },
+  set_img:      { k: '写真',                   h: 'しゃしん' },
+  set_img_pick: { k: '画像をえらぶ',            h: 'がぞうを えらぶ' },
+  set_img_del:  { k: '写真をけす',              h: 'しゃしんを けす' },
+  set_img_hint: { k: '写真を入れると絵文字より優先されます', h: 'しゃしんを いれると えもじより さきに でます' },
+  set_img_ng:   { k: '画像を読み込めませんでした', h: 'がぞうを よみこめませんでした' },
+  set_img_big:  { k: 'この画像は大きすぎます。別の画像を試してください', h: 'この がぞうは おおきすぎます' },
+  set_full:     { k: '保存できる容量を超えました。写真を減らしてください', h: 'ほぞんできる りょうを こえました。しゃしんを へらして ください' },
   set_barcode:  { k: 'バーコード番号（任意）',   h: 'バーコードばんごう（なくてもよい）' },
   set_save:     { k: '保存する',               h: 'ほぞん する' },
   set_saved:    { k: '保存しました',           h: 'ほぞん しました' },

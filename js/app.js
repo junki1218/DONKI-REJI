@@ -12,7 +12,6 @@ const S = {
   majicaMoney: 3000,
   majicaPoints: 230,
   cart: [],
-  scanned: {},
   payMethod: null,
   usedPoints: 0,
   inserted: 0,
@@ -49,6 +48,11 @@ const yen = (n) => n.toLocaleString('ja-JP') + (S.kana ? 'えん' : '円');
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 /* 実物の硬貨の色味（500/100/50=白銅、5=黄銅、10=青銅、1=アルミ） */
+/* 商品の見た目。写真を登録していれば写真、していなければ絵文字を出す */
+const pic = (it, cls) => (it && it.img)
+  ? `<img class="pic ${cls || ''}" src="${esc(it.img)}" alt="">`
+  : `<span class="pic ${cls || ''} emoji">${it ? it.icon : '📦'}</span>`;
+
 const coinTone = (v) => (v === 5 ? 'brass' : v === 10 ? 'copper' : v === 1 ? 'alum' : 'silver');
 
 const cartTotal = () => S.cart.reduce((a, i) => a + i.price * i.qty, 0);
@@ -116,9 +120,9 @@ const camMsg = (text, cls) => {
   el.className = 'cam-msg' + (cls ? ' ' + cls : '');
 };
 
-function camLog(icon, name, price) {
+function camLog(item, name, price) {
   const li = document.createElement('li');
-  li.innerHTML = `<span>${icon}</span><span>${esc(name)}</span>` + (price != null ? `<span class="pr">${esc(yen(price))}</span>` : '');
+  li.innerHTML = pic(item, 'sm') + `<span>${esc(name)}</span>` + (price != null ? `<span class="pr">${esc(yen(price))}</span>` : '');
   const list = $('#camList');
   list.prepend(li);
   while (list.children.length > 12) list.lastChild.remove();
@@ -217,10 +221,9 @@ function handleCode(code) {
   const p = findItemByCode(PRODUCTS, code);
   if (p) {
     addToCart(p);
-    S.scanned[p.id] = true;
     sfxScan();
     camMsg(`${nm(p)}　${yen(p.price)}`, 'ok');
-    camLog(p.icon, nm(p), p.price);
+    camLog(p, nm(p), p.price);
     render();
     return;
   }
@@ -248,14 +251,13 @@ function closeCamera() {
 function addToCart(src, qty = 1) {
   const f = S.cart.find((i) => i.id === src.id);
   if (f) f.qty += qty;
-  else S.cart.push({ id: src.id, k: src.k, h: src.h, icon: src.icon, price: src.price, qty });
+  else S.cart.push({ id: src.id, k: src.k, h: src.h, icon: src.icon, img: src.img || '', price: src.price, qty });
 }
 function removeFromCart(id) {
   const i = S.cart.findIndex((x) => x.id === id);
   if (i < 0) return;
   if (S.cart[i].qty > 1) S.cart[i].qty -= 1;
   else S.cart.splice(i, 1);
-  delete S.scanned[id];
 }
 
 function breakChange(amount) {
@@ -271,7 +273,7 @@ function breakChange(amount) {
 function resetAll(keepMajica) {
   const m = S.majicaMoney, p = S.majicaPoints;
   Object.assign(S, {
-    bagChoice: null, hasMajica: false, cart: [], scanned: {}, payMethod: null,
+    bagChoice: null, hasMajica: false, cart: [], payMethod: null,
     usedPoints: 0, inserted: 0, insCount: {}, coinsIn: 0, pointInput: '',
     chargeAmount: 0, change: 0, changeBreak: []
   });
@@ -385,42 +387,31 @@ const VIEWS = {
 
   scan: () => ({
     msg: t('msg_scan'),
+    fit: true,
     body: `
-      <div class="scan-wrap">
-        <div class="panel">
-          <div class="ttl">${esc(S.kana ? 'しょうひんを えらんで スキャン' : '商品を選んでスキャン')}</div>
-          <div class="shelf">
-            ${PRODUCTS.map((p) => `
-              <button class="item${S.scanned[p.id] ? ' scanned' : ''}" data-act="scan" data-v="${p.id}">
-                <span class="ico">${p.icon}</span>
-                <span class="nm">${esc(nm(p))}</span>
-                <span class="pr">${esc(yen(p.price))}</span>
-                <span class="bc">${esc(p.id)}${p.barcode ? ' / ' + esc(p.barcode) : ''}</span>
-              </button>`).join('')}
-          </div>
+      <div class="panel scan-panel">
+        <div class="ttl">${esc(t('cart'))}（${cartCount()}${esc(t('pieces'))}）</div>
+        <div class="lines">
+          ${S.cart.length === 0
+            ? `<div class="empty">${esc(S.kana ? 'まだ ありません' : 'まだ登録がありません')}</div>`
+            : S.cart.map((i) => `
+              <div class="line">
+                ${pic(i, 'sm')}<span class="l-nm">${esc(nm(i))}</span>
+                <span class="l-qty">×${i.qty}</span>
+                <span class="l-pr">${esc(yen(i.price * i.qty))}</span>
+                <button class="l-del" data-act="del" data-v="${i.id}" aria-label="へらす">−</button>
+              </div>`).join('')}
         </div>
-        <div class="panel">
-          <div class="ttl">${esc(t('nobarcode'))}</div>
-          <div class="nb-row">
-            ${NO_BARCODE.map((n) => `<button class="nb-btn" data-act="nb" data-v="${n.id}">${n.icon} ${esc(nm(n))}</button>`).join('')}
-            <button class="nb-btn" data-act="go" data-v="bagsize">🛍️ ${esc(t('addbag'))}</button>
-          </div>
-          <div class="ttl">${esc(t('cart'))}（${cartCount()}${esc(t('pieces'))}）</div>
-          <div class="lines">
-            ${S.cart.length === 0
-              ? `<div class="empty">${esc(S.kana ? 'まだ ありません' : 'まだ登録がありません')}</div>`
-              : S.cart.map((i) => `
-                <div class="line">
-                  <span>${i.icon}</span><span class="l-nm">${esc(nm(i))}</span>
-                  <span class="l-qty">×${i.qty}</span>
-                  <span class="l-pr">${esc(yen(i.price * i.qty))}</span>
-                  <button class="l-del" data-act="del" data-v="${i.id}" aria-label="へらす">−</button>
-                </div>`).join('')}
-          </div>
-          <div class="total-row">
-            <span class="lab">${esc(t('total'))}</span>
-            <span class="val">${esc(yen(cartTotal()))}</span>
-          </div>
+        <div class="total-row">
+          <span class="lab">${esc(t('total'))}</span>
+          <span class="val">${esc(yen(cartTotal()))}</span>
+        </div>
+      </div>
+      <div class="nb-block">
+        <div class="nb-ttl">${esc(t('nobarcode'))}</div>
+        <div class="nb-row">
+          ${NO_BARCODE.map((n) => `<button class="nb-btn" data-act="nb" data-v="${n.id}">${n.icon} ${esc(nm(n))}</button>`).join('')}
+          <button class="nb-btn" data-act="go" data-v="bagsize">🛍️ ${esc(t('addbag'))}</button>
         </div>
       </div>
       <div class="scr-foot">
@@ -438,7 +429,7 @@ const VIEWS = {
         <div class="ttl">${esc(t('cart'))}</div>
         <div class="lines">
           ${S.cart.map((i) => `
-            <div class="line"><span>${i.icon}</span><span class="l-nm">${esc(nm(i))}</span>
+            <div class="line">${pic(i, 'sm')}<span class="l-nm">${esc(nm(i))}</span>
             <span class="l-qty">×${i.qty}</span><span class="l-pr">${esc(yen(i.price * i.qty))}</span></div>`).join('')}
         </div>
       </div>
@@ -630,7 +621,7 @@ function render() {
   const foots = bodyEl.querySelectorAll('.scr-foot');
   if (foots.length) bodyEl.after(foots[foots.length - 1]);
 
-  screenEl.className = v.theme === 'pink' ? 'pink' : '';
+  screenEl.className = (v.theme === 'pink' ? 'pink' : '') + (v.fit ? ' fit' : '');
   document.body.classList.toggle('kana', S.kana);
   const cur = STEP_OF[S.screen];
   $('#steps').innerHTML = (S.screen === 'idle') ? '' : STEPS.map((_, i) => `<div class="st${i <= cur ? ' on' : ''}"></div>`).join('');
@@ -713,6 +704,19 @@ function viewSettings() {
             <label for="ic${i}">${esc(t('set_icon'))}</label>
             <input id="ic${i}" data-f="icon" class="icon" value="${esc(it.icon)}" maxlength="4">
           </div>
+          <div class="set-f set-img">
+            <label>${esc(t('set_img'))}</label>
+            <div class="img-row">
+              <span class="img-prev">${pic(it)}</span>
+              <span class="img-btns">
+                <label class="img-pick">${esc(t('set_img_pick'))}
+                  <input type="file" accept="image/*" data-app="img" data-i="${i}" hidden>
+                </label>
+                ${it.img ? `<button class="img-clear" data-app="imgdel" data-i="${i}">${esc(t('set_img_del'))}</button>` : ''}
+              </span>
+            </div>
+            <span class="hint">${esc(t('set_img_hint'))}</span>
+          </div>
           <button class="set-del" data-app="del" data-i="${i}" title="${esc(t('set_del'))}">✕</button>
         </div>`).join('')}
     </div>
@@ -739,7 +743,11 @@ function readDraftFromInputs() {
 function saveSettings() {
   readDraftFromInputs();
   const saved = saveItems(draft);
-  if (!saved) { toast(t('set_nostore')); return; }
+  if (!saved) {
+    const hasImg = draft.some((x) => x.img);
+    toast(hasImg ? t('set_full') : t('set_nostore'));   // 写真があるなら容量超過の可能性が高い
+    return;
+  }
   PRODUCTS = saved;
   draft = saved.map((x) => Object.assign({}, x));
   renderApp();
@@ -767,7 +775,7 @@ appEl.addEventListener('click', (ev) => {
       sfxTap();
       readDraftFromInputs();
       if (draft.length >= ITEM_COUNT_MAX) { toast(t('set_max')); break; }
-      draft.push({ id: `QR${draft.length + 1}`, k: '', h: '', price: 100, icon: '📦', barcode: '' });
+      draft.push({ id: `QR${draft.length + 1}`, k: '', h: '', price: 100, icon: '📦', img: '', barcode: '' });
       renderApp(); setDirty(true);
       break;
     case 'del': {
@@ -778,6 +786,13 @@ appEl.addEventListener('click', (ev) => {
       renderApp(); setDirty(true);
       break;
     }
+    case 'imgdel':
+      sfxTap();
+      readDraftFromInputs();
+      draft[Number(el.dataset.i)].img = '';
+      renderApp(); setDirty(true);
+      break;
+
     case 'reset':
       sfxTap();
       if (!window.confirm(t('set_reset_q'))) break;
@@ -788,6 +803,24 @@ appEl.addEventListener('click', (ev) => {
   }
 });
 appEl.addEventListener('input', (ev) => { if (ev.target.matches('[data-f]')) setDirty(true); });
+
+/* ローカル画像の取り込み */
+appEl.addEventListener('change', async (ev) => {
+  const inp = ev.target.closest('input[type="file"][data-app="img"]');
+  if (!inp || !inp.files || !inp.files[0]) return;
+  const i = Number(inp.dataset.i);
+  const file = inp.files[0];
+  inp.value = '';                                  // 同じ画像をもう一度選べるようにする
+  readDraftFromInputs();                           // 先に入力中の文字を取り込んでおく
+  try {
+    draft[i].img = await imageFileToDataUrl(file);
+    sfxOk();
+    renderApp(); setDirty(true);
+  } catch (e) {
+    sfxNg();
+    toast(e && e.message === 'TOO_BIG' ? t('set_img_big') : t('set_img_ng'));
+  }
+});
 
 $('#homeBtn').addEventListener('click', () => {
   sfxTap();
@@ -849,12 +882,6 @@ screenEl.addEventListener('click', (ev) => {
       break;
 
     case 'majicaScan': scannerFx('ピッ', () => go('majicaBalance')); break;
-
-    case 'scan': {
-      const p = PRODUCTS.find((x) => x.id === v);
-      scannerFx('ピッ', () => { addToCart(p); S.scanned[p.id] = true; render(); });
-      break;
-    }
 
     case 'nb': {
       const n = NO_BARCODE.find((x) => x.id === v);
