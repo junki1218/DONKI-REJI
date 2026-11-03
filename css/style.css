@@ -485,3 +485,52 @@ html, body {
   .coin { width: 56px; height: 56px; font-size: .82rem; }
   .msgbar { min-height: 76px; padding: 10px 12px; }
 }
+
+/* ===== カメラでQR/バーコードを読み取る画面 ===== */
+#cam {
+  position: fixed; inset: 0; z-index: 70;
+  display: none; place-items: center;
+  background: rgba(8,16,30,.82);
+  padding: 12px;
+}
+#cam.on { display: grid; }
+.cam-box {
+  width: min(560px, 100%);
+  max-height: 100%;
+  background: #121a26;
+  border: 1px solid #39465a;
+  border-radius: 10px;
+  padding: 12px;
+  display: flex; flex-direction: column; gap: 10px;
+  color: #e8eef6;
+}
+.cam-head { display: flex; align-items: center; gap: 10px; }
+.cam-head #camTitle { flex: 1; font-weight: 700; font-size: 1rem; }
+.cam-view {
+  position: relative;
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+}
+.cam-view video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cam-frame {
+  position: absolute; inset: 14% 18%;
+  border: 3px solid rgba(255,221,0,.9);
+  border-radius: 10px;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,.28);
+  pointer-events: none;
+}
+.cam-msg { font-size: .9rem; color: #b9c6d6; min-height: 1.4em; line-height: 1.5; }
+.cam-msg.err { color: #ff9a92; }
+.cam-msg.ok { color: #7fe0a0; font-weight: 700; }
+.cam-list {
+  list-style: none; margin: 0; padding: 0;
+  max-height: 120px; overflow-y: auto;
+  font-size: .9rem;
+}
+.cam-list li {
+  display: flex; gap: 8px; align-items: center;
+  padding: 5px 2px; border-bottom: 1px solid #253040;
+}
+.cam-list li .pr { margin-left: auto; font-weight: 700; }

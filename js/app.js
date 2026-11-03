@@ -95,7 +95,148 @@ function scannerFx(label, cb) {
   setTimeout(() => { sc.classList.remove('on'); if (cb) cb(); }, 500);
 }
 
-const go = (screen) => { S.screen = screen; render(); };
+const go = (screen) => { if (CAM.stream) closeCamera(); S.screen = screen; render(); };
+
+/* ================= カメラでQR/バーコードを読み取る =================
+   iOS/iPadOS の Safari には BarcodeDetector が無いので、
+   使える端末ではそれを、無い端末では同梱の jsQR を使う。
+   QRの中身は商品のバーコード番号そのものなので、
+   QRカードでも本物のJANバーコードでも同じ照合で商品が引ける。 */
+const CAM = { stream: null, timer: null, detector: null, mode: null, last: '', lastAt: 0, canvas: null, ctx: null };
+
+const camMsg = (text, cls) => {
+  const el = $('#camMsg');
+  el.textContent = text;
+  el.className = 'cam-msg' + (cls ? ' ' + cls : '');
+};
+
+function camLog(icon, name, price) {
+  const li = document.createElement('li');
+  li.innerHTML = `<span>${icon}</span><span>${esc(name)}</span>` + (price != null ? `<span class="pr">${esc(yen(price))}</span>` : '');
+  const list = $('#camList');
+  list.prepend(li);
+  while (list.children.length > 12) list.lastChild.remove();
+}
+
+async function openCamera(mode) {
+  CAM.mode = mode;
+  CAM.last = ''; CAM.lastAt = 0;
+  $('#camList').innerHTML = '';
+  $('#camTitle').textContent = mode === 'majica'
+    ? (S.kana ? 'マジカカードの QRを よみとります' : 'majicaカードのQRを読み取ります')
+    : (S.kana ? 'しょうひんの QRを よみとります' : '商品のQRを読み取ります');
+  $('#cam').classList.add('on');
+  camMsg(S.kana ? 'カメラを じゅんび しています…' : 'カメラを準備しています…');
+
+  if (!window.isSecureContext) {
+    camMsg(S.kana ? 'https で ひらかないと カメラは つかえません' : 'httpsで開かないとカメラは使えません', 'err');
+    return;
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    camMsg(S.kana ? 'この ブラウザでは カメラが つかえません' : 'このブラウザではカメラが使えません', 'err');
+    return;
+  }
+  try {
+    CAM.stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }, audio: false
+    });
+  } catch (e) {
+    const name = e && e.name;
+    camMsg(
+      name === 'NotAllowedError' ? (S.kana ? 'カメラの しようが きょか されませんでした。ブラウザの せっていで きょか して ください' : 'カメラの使用が許可されませんでした。ブラウザの設定で許可してください')
+      : name === 'NotFoundError' ? (S.kana ? 'カメラが みつかりません' : 'カメラが見つかりません')
+      : (S.kana ? 'カメラを ひらけませんでした' : 'カメラを開けませんでした') + '（' + name + '）', 'err');
+    return;
+  }
+
+  const v = $('#camVideo');
+  v.srcObject = CAM.stream;
+  try { await v.play(); } catch (e) { /* 自動再生が止められても下のループで拾える */ }
+
+  /* 標準APIが使えるなら、本物のJANバーコードも読めるようにする */
+  if ('BarcodeDetector' in window) {
+    try {
+      const supported = await window.BarcodeDetector.getSupportedFormats();
+      const want = ['qr_code', 'ean_13', 'ean_8', 'code_128'].filter((f) => supported.includes(f));
+      if (want.length) CAM.detector = new window.BarcodeDetector({ formats: want });
+    } catch (e) { CAM.detector = null; }
+  }
+
+  camMsg(S.kana ? 'わくの なかに QRを いれて ください' : '枠の中にQRを入れてください');
+  CAM.timer = setInterval(camTick, 150);
+}
+
+async function camTick() {
+  const v = $('#camVideo');
+  if (!v || !v.videoWidth) return;
+  let code = null;
+
+  if (CAM.detector) {
+    try {
+      const found = await CAM.detector.detect(v);
+      if (found && found.length) code = found[0].rawValue;
+    } catch (e) { /* 読めなかっただけ */ }
+  }
+  if (!code && typeof window.jsQR === 'function') {
+    const W = 480;
+    const H = Math.max(1, Math.round(v.videoHeight * W / v.videoWidth));
+    const cv = CAM.canvas || (CAM.canvas = document.createElement('canvas'));
+    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; CAM.ctx = null; }
+    const ctx = CAM.ctx || (CAM.ctx = cv.getContext('2d', { willReadFrequently: true }));
+    ctx.drawImage(v, 0, 0, W, H);
+    const res = window.jsQR(ctx.getImageData(0, 0, W, H).data, W, H, { inversionAttempts: 'dontInvert' });
+    if (res && res.data) code = res.data;
+  }
+  if (code) handleCode(String(code).trim());
+}
+
+function handleCode(code) {
+  const now = Date.now();
+  if (code === CAM.last && now - CAM.lastAt < 2000) return;   // 同じコードの連続読みを防ぐ
+  CAM.last = code; CAM.lastAt = now;
+
+  if (CAM.mode === 'majica') {
+    if (code.toUpperCase() === 'MAJICA') {
+      sfxScan();
+      camMsg(S.kana ? 'よみとりました' : '読み取りました', 'ok');
+      closeCamera();
+      go('majicaBalance');
+    } else {
+      sfxNg();
+      camMsg(S.kana ? 'マジカの カードでは ありません' : 'majicaのカードではありません', 'err');
+    }
+    return;
+  }
+
+  const p = PRODUCTS.find((x) => x.barcode === code);
+  if (p) {
+    addToCart(p);
+    S.scanned[p.id] = true;
+    sfxScan();
+    camMsg(`${nm(p)}　${yen(p.price)}`, 'ok');
+    camLog(p.icon, nm(p), p.price);
+    render();
+    return;
+  }
+  if (code.toUpperCase() === 'MAJICA') {
+    sfxNg();
+    camMsg(S.kana ? 'マジカの カードは さいしょの がめんで よみとります' : 'majicaカードは最初の画面で読み取ります', 'err');
+    return;
+  }
+  sfxNg();
+  camMsg((S.kana ? 'とうろくの ない しょうひんです' : '登録されていない商品です') + `（${esc(code)}）`, 'err');
+}
+
+function closeCamera() {
+  if (CAM.timer) { clearInterval(CAM.timer); CAM.timer = null; }
+  if (CAM.stream) { CAM.stream.getTracks().forEach((t) => t.stop()); CAM.stream = null; }
+  const v = $('#camVideo');
+  if (v) v.srcObject = null;
+  CAM.detector = null;
+  $('#cam').classList.remove('on');
+}
+
+
 
 /* ================= カート ================= */
 function addToCart(src, qty = 1) {
@@ -220,6 +361,7 @@ const VIEWS = {
       </div>
       <div class="scr-foot">
         <button class="btn btn-gray" data-act="go" data-v="majicaAsk">${esc(t('back'))}</button>
+        <button class="btn btn-red" data-act="cam" data-v="majica">📷 ${esc(t('cam_majica'))}</button>
         <button class="btn btn-or" data-act="majicaScan">${esc(S.kana ? 'カードを かざす' : 'カードをかざす')}</button>
       </div>`
   }),
@@ -277,6 +419,7 @@ const VIEWS = {
       </div>
       <div class="scr-foot">
         <button class="btn btn-gray" data-act="abort">${esc(t('cancel'))}</button>
+        <button class="btn btn-red" data-act="cam" data-v="product">📷 ${esc(t('cam_scan'))}</button>
         <button class="btn btn-or" data-act="go" data-v="confirm" ${S.cart.length ? '' : 'disabled'}>${esc(t('checkout'))}</button>
       </div>`
   }),
@@ -619,9 +762,16 @@ screenEl.addEventListener('click', (ev) => {
       toast(S.kana ? 'この れんしゅうアプリは にほんごだけ です' : 'この練習アプリは日本語のみです');
       break;
 
+    case 'cam': sfxTap(); openCamera(v); break;
+
     case 'restart': sfxTap(); resetAll(true); go('idle'); break;
   }
 });
+
+/* カメラ画面を閉じる */
+$('#camClose').addEventListener('click', () => { sfxTap(); closeCamera(); });
+$('#cam').addEventListener('click', (e) => { if (e.target.id === 'cam') closeCamera(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && CAM.stream) closeCamera(); });
 
 /* トグル */
 $('#kanaToggle').addEventListener('click', (e) => {
