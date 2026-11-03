@@ -2,6 +2,7 @@
 
 /* ================= 状態 ================= */
 const S = {
+  mode: 'home',          // 'home' | 'settings' | 'register'
   screen: 'idle',
   kana: false,
   sound: true,
@@ -35,6 +36,11 @@ const STEP_OF = {
 /* ================= 小道具 ================= */
 const $ = (sel) => document.querySelector(sel);
 const screenEl = $('#screen');
+const appEl = $('#app');
+
+/* 設定画面で編集中のデータ。保存するまで PRODUCTS には反映しない */
+let draft = null;
+let draftDirty = false;
 
 const t  = (key) => (S.kana ? T[key].h : T[key].k);
 const en = (key) => T[key].en || '';
@@ -208,7 +214,7 @@ function handleCode(code) {
     return;
   }
 
-  const p = PRODUCTS.find((x) => x.barcode === code);
+  const p = findItemByCode(PRODUCTS, code);
   if (p) {
     addToCart(p);
     S.scanned[p.id] = true;
@@ -389,7 +395,7 @@ const VIEWS = {
                 <span class="ico">${p.icon}</span>
                 <span class="nm">${esc(nm(p))}</span>
                 <span class="pr">${esc(yen(p.price))}</span>
-                <span class="bc">${p.barcode}</span>
+                <span class="bc">${esc(p.id)}${p.barcode ? ' / ' + esc(p.barcode) : ''}</span>
               </button>`).join('')}
           </div>
         </div>
@@ -631,6 +637,164 @@ function render() {
   screenEl.scrollTop = 0;
 }
 
+/* ================= スタート画面・設定画面 ================= */
+function setMode(mode) {
+  if (CAM.stream) closeCamera();
+  S.mode = mode;
+  document.body.classList.toggle('app-mode', mode !== 'register');
+  appEl.classList.toggle('on', mode !== 'register');
+  $('#homeBtn').hidden = (mode === 'home');
+  $('#cardsLink').hidden = (mode === 'home');
+  $('#kanaToggle').hidden = (mode === 'settings');
+  $('#soundToggle').hidden = (mode === 'settings');
+  if (mode === 'register') { render(); }
+  else { $('#steps').innerHTML = ''; renderApp(); }
+}
+
+function renderApp() {
+  appEl.innerHTML = (S.mode === 'settings') ? viewSettings() : viewHome();
+  appEl.scrollTop = 0;
+  if (S.mode === 'settings') setDirty(draftDirty);
+}
+
+function viewHome() {
+  return `<div class="app-wrap">
+    <div class="app-title">${esc(t('home_title'))}</div>
+    <div class="app-sub">${esc(t('home_sub'))}</div>
+    <div class="home-tiles">
+      <button class="home-tile" data-app="play">
+        <span class="ico">🛒</span>
+        <span class="lab">${esc(t('home_play'))}</span>
+        <span class="sub">${esc(t('home_play_s'))}</span>
+      </button>
+      <button class="home-tile gear" data-app="settings">
+        <span class="ico">⚙️</span>
+        <span class="lab">${esc(t('home_setting'))}</span>
+        <span class="sub">${esc(t('home_set_s'))}</span>
+      </button>
+    </div>
+  </div>`;
+}
+
+function viewSettings() {
+  return `<div class="app-wrap">
+    <div class="set-bar">
+      <button class="btn btn-or" data-app="save">${esc(t('set_save'))}</button>
+      <button class="btn btn-gray" data-app="add">＋ ${esc(t('set_add'))}</button>
+      <button class="btn btn-gray" data-app="reset">${esc(t('set_reset'))}</button>
+      <a class="btn btn-gray" href="cards.html" target="_blank" rel="noopener">🖨 ${esc(t('set_cards'))}</a>
+      <span class="grow"></span>
+      <span class="set-state" id="setState"></span>
+    </div>
+    <div class="app-title" style="text-align:left;font-size:1.3rem">${esc(t('set_title'))}</div>
+    <div class="set-lead">${esc(t('set_lead'))}</div>
+    <div class="set-list">
+      ${draft.map((it, i) => `
+        <div class="set-row" data-i="${i}">
+          <div class="qrno">QR${i + 1}<small>カードの番号</small></div>
+          <div class="set-f">
+            <label for="nm${i}">${esc(t('set_name'))}</label>
+            <input id="nm${i}" data-f="k" value="${esc(it.k)}" maxlength="30">
+          </div>
+          <div class="set-f">
+            <label for="kn${i}">${esc(t('set_kana'))}</label>
+            <input id="kn${i}" data-f="h" value="${esc(it.h)}" maxlength="30">
+            <span class="hint">${esc(t('set_kana_ph'))}</span>
+          </div>
+          <div class="set-f">
+            <label for="pr${i}">${esc(t('set_price'))}</label>
+            <input id="pr${i}" data-f="price" class="num" type="number" inputmode="numeric" min="0" max="99999" value="${it.price}">
+          </div>
+          <div class="set-f">
+            <label for="bc${i}">${esc(t('set_barcode'))}</label>
+            <input id="bc${i}" data-f="barcode" class="num" inputmode="numeric" value="${esc(it.barcode)}" maxlength="14">
+          </div>
+          <div class="set-f">
+            <label for="ic${i}">${esc(t('set_icon'))}</label>
+            <input id="ic${i}" data-f="icon" class="icon" value="${esc(it.icon)}" maxlength="4">
+          </div>
+          <button class="set-del" data-app="del" data-i="${i}" title="${esc(t('set_del'))}">✕</button>
+        </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+function setDirty(on) {
+  draftDirty = on;
+  const el = $('#setState');
+  if (!el) return;
+  el.textContent = on ? t('set_unsaved') : '';
+  el.className = 'set-state';
+}
+
+function readDraftFromInputs() {
+  appEl.querySelectorAll('.set-row').forEach((row) => {
+    const i = Number(row.dataset.i);
+    row.querySelectorAll('[data-f]').forEach((inp) => {
+      draft[i][inp.dataset.f] = (inp.dataset.f === 'price') ? Number(inp.value) : inp.value;
+    });
+  });
+}
+
+function saveSettings() {
+  readDraftFromInputs();
+  const saved = saveItems(draft);
+  if (!saved) { toast(t('set_nostore')); return; }
+  PRODUCTS = saved;
+  draft = saved.map((x) => Object.assign({}, x));
+  renderApp();
+  setDirty(false);
+  const el = $('#setState');
+  if (el) { el.textContent = t('set_saved'); el.className = 'set-state ok'; }
+  sfxOk();
+}
+
+/* 設定画面の操作 */
+appEl.addEventListener('click', (ev) => {
+  const el = ev.target.closest('[data-app]');
+  if (!el) return;
+  switch (el.dataset.app) {
+    case 'play':
+      sfxTap(); resetAll(true); S.screen = 'idle'; setMode('register'); break;
+    case 'settings':
+      sfxTap();
+      draft = PRODUCTS.map((x) => Object.assign({}, x));
+      draftDirty = false;
+      setMode('settings');
+      break;
+    case 'save': sfxTap(); saveSettings(); break;
+    case 'add':
+      sfxTap();
+      readDraftFromInputs();
+      if (draft.length >= ITEM_COUNT_MAX) { toast(t('set_max')); break; }
+      draft.push({ id: `QR${draft.length + 1}`, k: '', h: '', price: 100, icon: '📦', barcode: '' });
+      renderApp(); setDirty(true);
+      break;
+    case 'del': {
+      sfxTap();
+      readDraftFromInputs();
+      if (draft.length <= 1) { toast(t('set_min')); break; }
+      draft.splice(Number(el.dataset.i), 1);
+      renderApp(); setDirty(true);
+      break;
+    }
+    case 'reset':
+      sfxTap();
+      if (!window.confirm(t('set_reset_q'))) break;
+      PRODUCTS = resetItems();
+      draft = PRODUCTS.map((x) => Object.assign({}, x));
+      renderApp(); setDirty(false);
+      break;
+  }
+});
+appEl.addEventListener('input', (ev) => { if (ev.target.matches('[data-f]')) setDirty(true); });
+
+$('#homeBtn').addEventListener('click', () => {
+  sfxTap();
+  if (S.mode === 'settings' && draftDirty && !window.confirm(t('set_unsaved') + '\n' + t('home_back') + ' ?')) return;
+  setMode('home');
+});
+
 /* ================= 会計の確定 ================= */
 function finish(method) {
   S.payMethod = method;
@@ -787,4 +951,4 @@ $('#soundToggle').addEventListener('click', (e) => {
   if (S.sound) sfxTap();
 });
 
-render();
+setMode('home');   /* 最初はスタート画面から */

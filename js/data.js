@@ -1,19 +1,82 @@
 /* 商品データと文言。かなモードは h: に「わかちがき」で入れる */
 
-const PRODUCTS = [
-  { id: 'onigiri',  k: 'おにぎり ツナマヨ',   h: 'おにぎり ツナマヨ',      price: 150, icon: '🍙', barcode: '4901234567890' },
-  { id: 'pan',      k: 'メロンパン',          h: 'メロンパン',             price: 128, icon: '🍞', barcode: '4902345678901' },
-  { id: 'gyunyu',   k: '牛乳 1L',             h: 'ぎゅうにゅう 1リットル', price: 238, icon: '🥛', barcode: '4903456789012' },
-  { id: 'tamago',   k: 'たまご 10個',         h: 'たまご 10こ',            price: 268, icon: '🥚', barcode: '4904567890123' },
-  { id: 'juice',    k: 'オレンジジュース',    h: 'オレンジジュース',       price: 198, icon: '🧃', barcode: '4905678901234' },
-  { id: 'potechi',  k: 'ポテトチップス',      h: 'ポテトチップス',         price: 108, icon: '🥔', barcode: '4906789012345' },
-  { id: 'choco',    k: 'チョコレート',        h: 'チョコレート',           price: 158, icon: '🍫', barcode: '4907890123456' },
-  { id: 'purin',    k: 'プリン 3個',          h: 'プリン 3こ',             price: 178, icon: '🍮', barcode: '4908901234567' },
-  { id: 'ramen',    k: 'カップラーメン',      h: 'カップラーメン',         price: 138, icon: '🍜', barcode: '4909012345678' },
-  { id: 'hamigaki', k: 'はみがき粉',          h: 'はみがきこ',             price: 298, icon: '🪥', barcode: '4900123456789' },
-  { id: 'nenpitsu', k: 'えんぴつ 5本',        h: 'えんぴつ 5ほん',         price: 220, icon: '✏️', barcode: '4911234567890' },
-  { id: 'tissue',   k: 'ティッシュ 5箱',      h: 'ティッシュ 5はこ',       price: 358, icon: '🧻', barcode: '4912345678901' }
+/* ===== QRカードの中身 =====
+   QRに入っているのは「QR1」「QR2」…という番号だけ。
+   商品名・値段はこちら側（設定）で持つので、
+   カードを刷り直さなくても中身だけ入れ替えられる。
+   barcode を入れておくと、本物のJANバーコードでも同じ商品が引ける
+   （ブラウザ標準のBarcodeDetectorが使える端末のみ）。 */
+const ITEM_COUNT_MAX = 24;
+
+const DEFAULT_ITEMS = [
+  { id: 'QR1',  k: 'おにぎり ツナマヨ', h: 'おにぎり ツナマヨ',      price: 150, icon: '🍙', barcode: '4901234567890' },
+  { id: 'QR2',  k: 'メロンパン',        h: 'メロンパン',             price: 128, icon: '🍞', barcode: '4902345678901' },
+  { id: 'QR3',  k: '牛乳 1L',           h: 'ぎゅうにゅう 1リットル', price: 238, icon: '🥛', barcode: '4903456789012' },
+  { id: 'QR4',  k: 'たまご 10個',       h: 'たまご 10こ',            price: 268, icon: '🥚', barcode: '4904567890123' },
+  { id: 'QR5',  k: 'オレンジジュース',  h: 'オレンジジュース',       price: 198, icon: '🧃', barcode: '4905678901234' },
+  { id: 'QR6',  k: 'ポテトチップス',    h: 'ポテトチップス',         price: 108, icon: '🥔', barcode: '4906789012345' },
+  { id: 'QR7',  k: 'チョコレート',      h: 'チョコレート',           price: 158, icon: '🍫', barcode: '4907890123456' },
+  { id: 'QR8',  k: 'プリン 3個',        h: 'プリン 3こ',             price: 178, icon: '🍮', barcode: '4908901234567' },
+  { id: 'QR9',  k: 'カップラーメン',    h: 'カップラーメン',         price: 138, icon: '🍜', barcode: '4909012345678' },
+  { id: 'QR10', k: 'はみがき粉',        h: 'はみがきこ',             price: 298, icon: '🪥', barcode: '4900123456789' },
+  { id: 'QR11', k: 'えんぴつ 5本',      h: 'えんぴつ 5ほん',         price: 220, icon: '✏️', barcode: '4911234567890' },
+  { id: 'QR12', k: 'ティッシュ 5箱',    h: 'ティッシュ 5はこ',       price: 358, icon: '🧻', barcode: '4912345678901' }
 ];
+
+const STORE_KEY = 'donkireji.items.v1';
+
+/* 1件ぶんを安全な形に整える。設定画面からの入力も、保存済みの値もここを通す */
+function normalizeItem(raw, index) {
+  const src = raw || {};
+  const price = Math.max(0, Math.min(99999, Math.round(Number(src.price)) || 0));
+  const k = String(src.k == null ? '' : src.k).trim().slice(0, 30) || `しょうひん${index + 1}`;
+  return {
+    id: `QR${index + 1}`,                        // 番号は並び順から必ず振り直す
+    k,
+    h: String(src.h == null ? '' : src.h).trim().slice(0, 30) || k,   // よみが空なら商品名をそのまま使う
+    price,
+    icon: String(src.icon == null ? '' : src.icon).trim().slice(0, 4) || '📦',
+    barcode: String(src.barcode == null ? '' : src.barcode).replace(/[^0-9]/g, '').slice(0, 14)
+  };
+}
+
+const cloneDefaults = () => DEFAULT_ITEMS.map((it, i) => normalizeItem(it, i));
+
+function loadItems() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return cloneDefaults();
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) return cloneDefaults();
+    return parsed.slice(0, ITEM_COUNT_MAX).map(normalizeItem);
+  } catch (e) {
+    return cloneDefaults();                       // 壊れていたら初期値で動かす
+  }
+}
+
+function saveItems(items) {
+  const clean = items.slice(0, ITEM_COUNT_MAX).map(normalizeItem);
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(clean));
+  } catch (e) {
+    return null;                                  // 保存できない設定のブラウザでも落とさない
+  }
+  return clean;
+}
+
+function resetItems() {
+  try { localStorage.removeItem(STORE_KEY); } catch (e) { /* 消せなくても初期値で続行 */ }
+  return cloneDefaults();
+}
+
+/* 読み取ったコードから商品を引く。QR番号でも本物のJANでも引ける */
+function findItemByCode(items, code) {
+  const c = String(code).trim();
+  const upper = c.toUpperCase();
+  return items.find((it) => it.id === upper) || items.find((it) => it.barcode && it.barcode === c) || null;
+}
+
+let PRODUCTS = loadItems();
 
 /* バーコードのない商品（画面左のボタンから選ぶ） */
 const NO_BARCODE = [
@@ -131,6 +194,37 @@ const T = {
   cam_scan:   { k: 'カメラでスキャン', h: 'カメラで よみとる' },
   cam_majica: { k: 'カメラで読み取る', h: 'カメラで よみとる' },
   cam_close:  { k: 'とじる',       h: 'とじる' },
+
+  /* --- スタート画面・設定画面（実機にはない、アプリ側の画面） --- */
+  home_title:   { k: 'レジの れんしゅう',       h: 'レジの れんしゅう' },
+  home_sub:     { k: 'どちらかを えらんでください', h: 'どちらかを えらんで ください' },
+  home_play:    { k: 'レジ練習',               h: 'レジ れんしゅう' },
+  home_play_s:  { k: 'セルフレジを つかってみる', h: 'セルフレジを つかって みる' },
+  home_setting: { k: '設定',                   h: 'せってい' },
+  home_set_s:   { k: 'QRの 商品名と 値段を かえる', h: 'QRの なまえと ねだんを かえる' },
+  home_back:    { k: 'さいしょの画面へ',        h: 'さいしょの がめんへ' },
+
+  set_title:    { k: '商品の設定',             h: 'しょうひんの せってい' },
+  set_lead:     { k: 'QRカードの 番号ごとに、商品名と 値段を 決められます。印刷したカードは そのまま使えます。',
+                  h: 'QRカードの ばんごうごとに、なまえと ねだんを きめられます。いんさつした カードは そのまま つかえます。' },
+  set_name:     { k: '商品名',                 h: 'なまえ' },
+  set_kana:     { k: 'よみ（ひらがな）',        h: 'よみ（ひらがな）' },
+  set_kana_ph:  { k: '空なら商品名をそのまま使います', h: 'からなら なまえを そのまま つかいます' },
+  set_price:    { k: '値段',                   h: 'ねだん' },
+  set_icon:     { k: '絵',                     h: 'え' },
+  set_barcode:  { k: 'バーコード番号（任意）',   h: 'バーコードばんごう（なくてもよい）' },
+  set_save:     { k: '保存する',               h: 'ほぞん する' },
+  set_saved:    { k: '保存しました',           h: 'ほぞん しました' },
+  set_unsaved:  { k: '保存されていない変更があります', h: 'ほぞんして いない へんこうが あります' },
+  set_add:      { k: 'QRを ふやす',            h: 'QRを ふやす' },
+  set_del:      { k: 'けす',                   h: 'けす' },
+  set_reset:    { k: '最初の内容にもどす',      h: 'さいしょの ないように もどす' },
+  set_reset_q:  { k: '全部の商品を最初の内容にもどします。よろしいですか？', h: 'ぜんぶ さいしょに もどします。いいですか？' },
+  set_cards:    { k: 'QRカードを印刷',          h: 'QRカードを いんさつ' },
+  set_max:      { k: 'QRは24個までです',        h: 'QRは 24こ までです' },
+  set_min:      { k: 'QRは1個以上 必要です',    h: 'QRは 1こ いじょう ひつようです' },
+  set_nostore:  { k: 'このブラウザでは設定を保存できません（開き直すと元に戻ります）',
+                  h: 'この ブラウザでは せっていを ほぞん できません' },
   sheets:     { k: '枚',         h: 'まい' },
   pieces:     { k: '点',         h: 'こ' },
   yen:        { k: '円',         h: 'えん' }
