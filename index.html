@@ -16,6 +16,7 @@
     <button class="toggle" id="homeBtn" hidden>← さいしょの画面</button>
     <button class="toggle" id="kanaToggle" aria-pressed="false">あ ひらがな</button>
     <button class="toggle" id="soundToggle" aria-pressed="true">🔊 おと</button>
+    <button class="toggle" id="selfcamToggle" aria-pressed="true">👤 じぶん</button>
     <a class="toggle" id="cardsLink" href="cards.html" target="_blank" rel="noopener">🖨 QRカード</a>
   </div>
 
@@ -25,6 +26,10 @@
 
   <div id="stage">
     <div id="bezel">
+      <!-- 画面の左上に、操作している人の顔をそのまま映すだけの窓。録画も送信もしない -->
+      <div id="selfcam" hidden>
+        <video id="selfVideo" playsinline muted autoplay aria-label="じぶんの かお"></video>
+      </div>
       <main id="screen" aria-live="polite"></main>
     </div>
     <div id="base" aria-hidden="true">

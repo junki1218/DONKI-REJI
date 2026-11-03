@@ -6,6 +6,7 @@ const S = {
   screen: 'idle',
   kana: false,
   sound: true,
+  selfcam: true,       // 画面左上に自分の顔を映すかどうか
   regNo: 5,
   bagChoice: null,
   hasMajica: false,
@@ -129,6 +130,7 @@ function camLog(item, name, price) {
 }
 
 async function openCamera(mode) {
+  closeSelfCam();          /* 外側カメラと同時に使えない端末があるので、いったん止める */
   CAM.mode = mode;
   CAM.last = ''; CAM.lastAt = 0;
   $('#camList').innerHTML = '';
@@ -243,8 +245,54 @@ function closeCamera() {
   if (v) v.srcObject = null;
   CAM.detector = null;
   $('#cam').classList.remove('on');
+  openSelfCam();           /* 読み取りが終わったら、顔の窓を出し直す */
 }
 
+
+/* ================= 画面左上に「じぶんの顔」を映す =================
+   実機のモニタに自分の姿が出るのと同じ見た目にするためだけのもの。
+   映像は <video> に流すだけで、録画も保存も外への送信も一切しない。
+   QRを読むカメラ（外側）と同時には使えない端末が多いので、
+   読み取り中は止めて、閉じたら戻す。 */
+const SELF = { stream: null, on: false, failed: false };
+
+async function openSelfCam() {
+  if (SELF.stream || S.mode !== 'register' || !S.selfcam) return;
+  if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+  try {
+    SELF.stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'user' }, width: { ideal: 640 } }, audio: false
+    });
+  } catch (e) {
+    /* 許可されなかった・カメラが無い場合は、窓を出さずに黙って続ける */
+    if (!SELF.failed) {
+      SELF.failed = true;
+      toast(S.kana ? 'カメラが つかえないので じぶんの かおは うつりません' : 'カメラが使えないため、自分の顔は映りません');
+    }
+    return;
+  }
+  /* 待っている間に別の画面へ移っていたら、そのまま止める */
+  if (S.mode !== 'register' || !S.selfcam) {
+    SELF.stream.getTracks().forEach((t) => t.stop());
+    SELF.stream = null;
+    return;
+  }
+  const v = $('#selfVideo');
+  v.srcObject = SELF.stream;
+  try { await v.play(); } catch (e) { /* 自動再生が止められても映像は出る */ }
+  SELF.on = true;
+  $('#selfcam').hidden = false;
+  screenEl.classList.add('selfcam');
+}
+
+function closeSelfCam() {
+  if (SELF.stream) { SELF.stream.getTracks().forEach((t) => t.stop()); SELF.stream = null; }
+  const v = $('#selfVideo');
+  if (v) v.srcObject = null;
+  SELF.on = false;
+  $('#selfcam').hidden = true;
+  screenEl.classList.remove('selfcam');
+}
 
 
 /* ================= カート ================= */
@@ -621,7 +669,7 @@ function render() {
   const foots = bodyEl.querySelectorAll('.scr-foot');
   if (foots.length) bodyEl.after(foots[foots.length - 1]);
 
-  screenEl.className = (v.theme === 'pink' ? 'pink' : '') + (v.fit ? ' fit' : '');
+  screenEl.className = (v.theme === 'pink' ? 'pink' : '') + (v.fit ? ' fit' : '') + (SELF.on ? ' selfcam' : '');
   document.body.classList.toggle('kana', S.kana);
   const cur = STEP_OF[S.screen];
   $('#steps').innerHTML = (S.screen === 'idle') ? '' : STEPS.map((_, i) => `<div class="st${i <= cur ? ' on' : ''}"></div>`).join('');
@@ -638,8 +686,9 @@ function setMode(mode) {
   $('#cardsLink').hidden = (mode === 'home');
   $('#kanaToggle').hidden = (mode === 'settings');
   $('#soundToggle').hidden = (mode === 'settings');
-  if (mode === 'register') { render(); }
-  else { $('#steps').innerHTML = ''; renderApp(); }
+  $('#selfcamToggle').hidden = (mode !== 'register');
+  if (mode === 'register') { render(); openSelfCam(); }
+  else { closeSelfCam(); $('#steps').innerHTML = ''; renderApp(); }
 }
 
 function renderApp() {
@@ -970,6 +1019,13 @@ $('#kanaToggle').addEventListener('click', (e) => {
   e.currentTarget.setAttribute('aria-pressed', String(S.kana));
   e.currentTarget.textContent = S.kana ? '漢 かんじ' : 'あ ひらがな';
   sfxTap(); render();
+});
+$('#selfcamToggle').addEventListener('click', (e) => {
+  S.selfcam = !S.selfcam;
+  e.currentTarget.setAttribute('aria-pressed', String(S.selfcam));
+  e.currentTarget.textContent = S.selfcam ? '👤 じぶん' : '🚫 じぶん';
+  sfxTap();
+  if (S.selfcam) { SELF.failed = false; openSelfCam(); } else closeSelfCam();
 });
 $('#soundToggle').addEventListener('click', (e) => {
   S.sound = !S.sound;
