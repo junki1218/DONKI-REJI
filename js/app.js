@@ -39,6 +39,9 @@ const nm = (o) => (S.kana ? o.h : o.k);
 const yen = (n) => n.toLocaleString('ja-JP') + (S.kana ? 'えん' : '円');
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+/* 実物の硬貨の色味に合わせる（500/100/50 は白銅、5 は黄銅、10 は青銅、1 はアルミ） */
+const coinTone = (v) => (v === 5 ? 'brass' : v === 10 ? 'copper' : v === 1 ? 'alum' : 'silver');
+
 const cartTotal = () => S.cart.reduce((a, i) => a + i.price * i.qty, 0);
 const cartCount = () => S.cart.reduce((a, i) => a + i.qty, 0);
 const dueAfterPoints = () => Math.max(0, cartTotal() - S.usedPoints);
@@ -342,7 +345,7 @@ const VIEWS = {
       <div class="cash-group">
         <div class="gl">${esc(t('coins'))}</div>
         <div class="cash-row">
-          ${COINS.map((c) => `<button class="coin${c.v <= 10 ? ' copper' : ''}" data-act="ins" data-v="${c.v}">${esc(S.kana ? c.h : c.label)}</button>`).join('')}
+          ${COINS.map((c) => `<button class="coin ${coinTone(c.v)}" data-act="ins" data-v="${c.v}">${esc(S.kana ? c.h : c.label)}</button>`).join('')}
         </div>
       </div>
     </div>
@@ -639,7 +642,7 @@ screenEl.addEventListener('click', (ev) => {
 $('#kanaToggle').addEventListener('click', (e) => {
   S.kana = !S.kana;
   e.currentTarget.setAttribute('aria-pressed', String(S.kana));
-  e.currentTarget.textContent = S.kana ? 'あ ひらがな' : '漢 かんじ';
+  e.currentTarget.textContent = S.kana ? '漢 かんじ' : 'あ ひらがな';
   sfxTap();
   render();
 });

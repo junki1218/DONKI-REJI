@@ -40,7 +40,8 @@ html, body {
 #topbar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 8px 12px;
   padding: 10px 16px;
   background: linear-gradient(180deg, var(--navy) 0%, var(--navy-d) 100%);
   color: #fff;
@@ -55,8 +56,12 @@ html, body {
   padding: 4px 12px;
   border-radius: 8px;
 }
-#topbar .note { font-size: .78rem; opacity: .85; }
-#topbar .spacer { flex: 1; }
+#topbar .note { font-size: .78rem; opacity: .85; flex: 1 1 160px; min-width: 0; }
+#topbar .spacer { flex: 1 1 0; }
+@media (max-width: 680px) {
+  #topbar .note { flex-basis: 100%; order: 3; font-size: .7rem; }
+  #topbar .spacer { display: none; }
+}
 
 .toggle {
   display: inline-flex;
@@ -70,6 +75,8 @@ html, body {
   border-radius: 999px;
   cursor: pointer;
   min-height: 40px;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 .toggle[aria-pressed="true"] {
   background: var(--yellow);
@@ -229,10 +236,10 @@ html, body {
 .nb-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
 .nb-btn {
   font-family: inherit;
-  font-size: .9rem;
+  font-size: .95rem;
   font-weight: 700;
   padding: 10px 14px;
-  min-height: 48px;
+  min-height: 64px;
   border-radius: 10px;
   border: 2px solid var(--navy);
   background: #eef3ff;
@@ -337,7 +344,9 @@ html, body {
   width: 66px;
   height: 66px;
 }
-.coin.copper { border-color: #b4794a; background: radial-gradient(circle at 35% 30%, #ffe3cd, #cf9163); color: #5a2f10; }
+.coin.copper { border-color: #a8673c; background: radial-gradient(circle at 35% 30%, #f3c9ab, #b9754a); color: #4a2409; }
+.coin.brass  { border-color: #b39637; background: radial-gradient(circle at 35% 30%, #fbf0bd, #d6b84f); color: #4d3d05; }
+.coin.alum   { border-color: #b7bdc4; background: radial-gradient(circle at 35% 30%, #ffffff, #dfe3e8); color: #2b3038; }
 .bill:active, .coin:active { transform: scale(.92); }
 .cash-count { font-size: .8rem; color: var(--gray); margin-top: 4px; }
 
