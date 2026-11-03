@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>無人レジ れんしゅう｜DONKI-REJI</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="machine">
+  <div id="topbar">
+    <span class="brand">セルフレジ</span>
+    <span class="note">※これは お金の はらいかたを 練習するための アプリです（非公式）</span>
+    <span class="spacer"></span>
+    <button class="toggle" id="kanaToggle" aria-pressed="false">あ ひらがな</button>
+    <button class="toggle" id="soundToggle" aria-pressed="true">🔊 おと</button>
+  </div>
+
+  <div id="steps"></div>
+
+  <main id="screen" aria-live="polite"></main>
+</div>
+
+<div id="scanner" aria-hidden="true"><div class="beam">ピッ</div></div>
+<div id="toast" role="status"></div>
+
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
