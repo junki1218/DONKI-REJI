@@ -475,6 +475,12 @@ function render() {
       </div>` : ''}
     </div>`;
 
+  /* 本文が4:3に収まらないときは本文側だけスクロールさせ、
+     操作ボタンの帯は本文の外に出して必ず見えるようにする */
+  const bodyEl = screenEl.querySelector('.scr-body');
+  const foots = bodyEl.querySelectorAll('.scr-foot');
+  if (foots.length) bodyEl.after(foots[foots.length - 1]);
+
   screenEl.className = v.theme === 'pink' ? 'pink' : '';
   document.body.classList.toggle('kana', S.kana);
   const cur = STEP_OF[S.screen];

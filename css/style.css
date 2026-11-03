@@ -76,20 +76,36 @@ html, body {
   max-width: 1020px;
   margin: 0 auto;
   background: #1b2430;
-  min-height: 100vh;
+  /* 高さを確定させておかないと、中身の多い画面（商品棚のあるスキャン画面）で
+     筐体ごと縦に伸びてページ全体がスクロールしてしまう。
+     高さを決めておけば、あふれるのは本文(.scr-body)の中だけになる */
+  height: 100vh;
+  height: 100dvh;          /* iOS Safari のツールバー分を差し引く */
   display: flex;
   flex-direction: column;
 }
+
+/* 筐体。スマホ縦では縦に伸ばして画面を大きく使い、
+   タブレット以上では実機どおり4:3に固定する（下の min-width:600px を参照） */
+#stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  width: calc(100% - 24px);
+  margin: 0 auto;
+  min-height: 0;
+}
 #bezel {
-  margin: 12px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin: 12px 0;
   padding: 14px 14px 26px;
   background: linear-gradient(180deg, var(--case), var(--case-d));
   border-radius: 10px;
   box-shadow: 0 12px 28px rgba(0,0,0,.45);
   position: relative;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+  min-height: 0;
 }
 #bezel::after {              /* 筐体下部のメーカーロゴ風 */
   content: 'TEC';
@@ -102,11 +118,87 @@ html, body {
 /* ===== 画面本体 ===== */
 #screen {
   flex: 1;
+  width: 100%;
   background: linear-gradient(180deg, var(--scr-top) 0%, var(--scr-bot) 100%);
   border: 2px solid #9aa0a8;
   display: flex;
   flex-direction: column;
-  min-height: 460px;
+  min-height: 0;
+}
+
+/* ===== レジ台（モニタの下の部分）=====
+   iPad縦のように縦に余裕がある画面でだけ出す。
+   実機でバーコードをかざす場所・お金を入れる場所にあたる */
+#base { display: none; }
+#base .scanwin, #base .slot {
+  background: linear-gradient(180deg, #2f3640, #1f252c);
+  border: 1px solid #474f59;
+  border-radius: 6px;
+  color: #8e99a6;
+  font-size: .78rem;
+  font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  letter-spacing: .08em;
+}
+#base .scanwin {
+  height: 58px;
+  margin-bottom: 10px;
+  background: linear-gradient(180deg, #3a2a2e, #221a1d);
+  border-color: #6b3b42;
+  color: #c2707c;
+  box-shadow: inset 0 0 24px rgba(228,0,43,.22);
+}
+#base .slots { display: flex; gap: 10px; }
+#base .slot { flex: 1; height: 42px; }
+
+/* ===== タブレット以上：実機どおり画面を4:3に固定して上下中央に置く ===== */
+@media (min-width: 600px) {
+  /* --reserve = 上部バー・筐体の余白・レジ台など、画面以外が使う高さ */
+  #stage {
+    --reserve: 170px;
+    flex: 0 0 auto;
+    margin: auto;
+    /* 縦が足りないとき（iPad横向きなど）は、4:3を保ったまま
+       モニタごと小さくする。幅を詰めれば高さは比率で決まる */
+    max-width: calc((100dvh - var(--reserve)) * 4 / 3 + 28px);
+  }
+  #bezel { flex: 0 0 auto; }
+  /* 既定は実機と同じ4:3。min-height を auto に戻してあるので、
+     中身が4:3に収まらない画面でだけ縦に伸びる
+     （4:3のまま押し込めると文字とボタンが小さくなりすぎるため）。
+     伸びるのは残りの高さまでで、それ以上は本文側がスクロールする */
+  #screen {
+    flex: 0 0 auto;
+    aspect-ratio: 4 / 3;
+    min-height: auto;
+    max-height: calc(100dvh - var(--reserve));
+  }
+}
+@media (min-width: 600px) and (min-height: 820px) {
+  #base { display: block; }
+  #stage { --reserve: 290px; }   /* レジ台を出す分だけ余計に確保する */
+}
+
+/* 画面を4:3に固定すると縦が足りなくなるので、タブレットでは各部を少し詰める */
+@media (min-width: 600px) {
+  .scr-body { padding: 12px 16px; }
+  #screen > .scr-foot { padding: 6px 16px 10px; gap: 10px; }
+  .btn { min-height: 48px; padding: 9px 20px; font-size: 1rem; }
+  .btn-or { min-height: 58px; font-size: 1.15rem; padding: 11px 28px; }
+  .amt-row { gap: 10px; margin-bottom: 10px; }
+  .amt { padding: 8px; }
+  .amt .val { font-size: 1.45rem; }
+  .amt.big .val { font-size: clamp(1.7rem, 4.2vw, 2.3rem); }
+  .cash-group { margin-bottom: 8px; }
+  .cash-row { gap: 8px; }
+  .bill { width: 96px; height: 52px; }
+  .coin { width: 56px; height: 56px; font-size: .85rem; }
+  .keypad { max-width: 252px; gap: 6px; }
+  .keypad .btn { min-height: 44px; font-size: 1.2rem; }
+  .shelf { min-height: 88px; }
+  .lines { min-height: 56px; }
+  .band { padding: 8px 18px; margin-top: 10px; }
+  .receipt { max-height: 180px; }
 }
 
 /* メッセージバー＋緑の罫線 */
@@ -239,6 +331,8 @@ html, body {
 .btn-red  { background: linear-gradient(180deg,var(--rd1),var(--rd2)); border-color: var(--rd-bd); color: #fff; }
 .btn[disabled] { filter: grayscale(.7); opacity: .5; cursor: not-allowed; }
 .scr-foot { margin-top: 16px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+/* 本文の外に出たときは、画面下部に固定の帯として振る舞う */
+#screen > .scr-foot { flex: 0 0 auto; margin: 0; padding: 8px 18px; }
 
 /* ===== 合計の黄色い帯 ===== */
 .band {
@@ -253,8 +347,8 @@ html, body {
 .band .am { margin-left: auto; font-size: clamp(1.6rem, 4.5vw, 2.3rem); font-weight: 900; }
 
 /* ===== スキャン画面 ===== */
-.scan-wrap { display: grid; grid-template-columns: 1fr 320px; gap: 12px; flex: 1; min-height: 0; }
-@media (max-width: 800px) { .scan-wrap { grid-template-columns: 1fr; } }
+.scan-wrap { display: grid; grid-template-columns: minmax(0,1fr) 300px; gap: 12px; flex: 1; min-height: 0; }
+@media (max-width: 700px) { .scan-wrap { grid-template-columns: 1fr; } }
 .panel {
   background: rgba(255,255,255,.72);
   border: 1px solid var(--line);
@@ -381,7 +475,8 @@ html, body {
 @media (max-width: 680px) {
   #topbar .note { flex-basis: 100%; order: 3; font-size: .68rem; }
   #topbar .spacer { display: none; }
-  #bezel { margin: 6px; padding: 8px 8px 20px; }
+  #stage { width: calc(100% - 12px); }
+  #bezel { margin: 6px 0; padding: 8px 8px 20px; }
   .scr-body { padding: 12px; }
   .tiles.c3, .tiles.c4 { grid-template-columns: repeat(2, 1fr); }
   .tile { min-height: 104px; }
