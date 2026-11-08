@@ -24,10 +24,10 @@ const S = {
   changeBreak: []
 };
 
-const STEPS = ['bag', 'majica', 'scan', 'pay', 'done'];
+const STEPS = ['majica', 'bag', 'scan', 'pay', 'done'];
 const STEP_OF = {
-  bag: 0, bagsize: 0, mybag: 0,
-  majicaAsk: 1, majicaScan: 1, majicaBalance: 1,
+  majicaScan: 0, majicaBalance: 0,
+  bag: 1, bagsize: 1, mybag: 1,
   scan: 2, confirm: 2,
   payMethod: 3, cash: 3, card: 3, point: 3, majicaPay: 3, majicaShort: 3, charge: 3,
   done: 4
@@ -89,6 +89,27 @@ const sfxTap  = () => beep(880, 0.05, 'sine', 0.08);
 const sfxCoin = () => beep(1320, 0.06, 'triangle', 0.1);
 const sfxOk   = () => { beep(1046, 0.1, 'sine', 0.12); setTimeout(() => beep(1568, 0.16, 'sine', 0.12), 110); };
 const sfxNg   = () => beep(220, 0.22, 'sawtooth', 0.1);
+
+/* 声で読み上げる。ブラウザの読み上げ機能をそのまま使う。
+   「ピッ」や画面の切り替わりと重ならないよう、少し置いてから話す。
+   読み上げ機能が無い端末・使えない端末では、黙ってとばす */
+function speak(text, delay = 220) {
+  if (!S.sound || !text) return;
+  if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance !== 'function') return;
+  setTimeout(() => {
+    try {
+      speechSynthesis.cancel();              /* 続けて読んだときは前の声を止める */
+      const u = new SpeechSynthesisUtterance(String(text));
+      u.lang = 'ja-JP';
+      u.rate = 0.9;                          /* 少しゆっくり */
+      speechSynthesis.speak(u);
+    } catch (e) { /* 読み上げられない環境は音だけで続行 */ }
+  }, delay);
+}
+const speakYen = (price) => speak(`${price}円`);
+
+/* 同じ画面に留まっている間は読み上げ直さない。画面が変わったときだけ話す */
+let saidScreen = null;
 
 function toast(msg, ms = 2400) {
   const el = $('#toast');
@@ -224,6 +245,7 @@ function handleCode(code) {
   if (p) {
     addToCart(p);
     sfxScan();
+    speakYen(p.price);
     camMsg(`${nm(p)}　${yen(p.price)}`, 'ok');
     camLog(p, nm(p), p.price);
     render();
@@ -239,6 +261,7 @@ function handleCode(code) {
 }
 
 function closeCamera() {
+  if ('speechSynthesis' in window) { try { speechSynthesis.cancel(); } catch (e) { /* 止められなくても害はない */ } }
   if (CAM.timer) { clearInterval(CAM.timer); CAM.timer = null; }
   if (CAM.stream) { CAM.stream.getTracks().forEach((t) => t.stop()); CAM.stream = null; }
   const v = $('#camVideo');
@@ -351,18 +374,31 @@ const band = () => `
    各画面は { msg, body, center?, regno?, english?, balance? } を返す */
 const VIEWS = {
 
+  /* 一番最初は majica の確認。実機もカードの読み取りから始まる */
   idle: () => ({
+    msg: t('msg_majica'),
+    say: t('say_majica'),
+    body: `
+      <div class="tiles c2">
+        ${tile('majica', '1', t('yes'), { red: true, mjc: true })}
+        ${tile('majica', '0', t('no'), {})}
+      </div>
+      <div class="tiles sub">
+        ${tile('noop', 'charge', t('top_charge'), { sm: true, icon: 'charge' })}
+        ${tile('noop', 'bal',    t('top_balance'), { sm: true })}
+      </div>`
+  }),
+
+  /* majica のあとにレジ袋を選ぶ */
+  bag: () => ({
     msg: t('msg_idle'),
+    say: t('say_bag'),
     body: `
       <div class="notice">${esc(t('bag_notice'))}</div>
       <div class="tiles c3">
         ${tile('bag', 'paid', t('bag_paid'), { icon: 'bag' })}
         ${tile('bag', 'my',   t('bag_my'),   { icon: 'tote' })}
         ${tile('bag', 'none', t('bag_none'))}
-      </div>
-      <div class="tiles sub">
-        ${tile('noop', 'charge', t('top_charge'), { sm: true, icon: 'charge' })}
-        ${tile('noop', 'bal',    t('top_balance'), { sm: true })}
       </div>`
   }),
 
@@ -379,8 +415,8 @@ const VIEWS = {
         }).join('')}
       </div>
       <div class="scr-foot">
-        <button class="btn btn-gray" data-act="go" data-v="idle">${esc(t('back'))}</button>
-        <button class="btn btn-or" data-act="go" data-v="majicaAsk">${esc(t('next'))}</button>
+        <button class="btn btn-gray" data-act="go" data-v="bag">${esc(t('back'))}</button>
+        <button class="btn btn-or" data-act="go" data-v="scan">${esc(t('next'))}</button>
       </div>`
   }),
 
@@ -393,18 +429,9 @@ const VIEWS = {
           <path d="M38 30c0-9 5-16 11-16s11 7 11 16M60 30c0-9 5-16 11-16s11 7 11 16" stroke="#c9a227"/>
           <path d="M34 34h52l-6 50H40z" fill="#f2ef9a" stroke="#b9b45a"/>
         </svg>
-        <button class="btn btn-or" data-act="go" data-v="majicaAsk" style="min-width:160px;min-height:110px;font-size:1.5rem">${esc(t('next'))}</button>
+        <button class="btn btn-or" data-act="go" data-v="scan" style="min-width:160px;min-height:110px;font-size:1.5rem">${esc(t('next'))}</button>
       </div>
-      <div class="scr-foot"><button class="btn btn-gray" data-act="go" data-v="idle">${esc(t('back'))}</button></div>`
-  }),
-
-  majicaAsk: () => ({
-    msg: t('msg_majica'),
-    body: `
-      <div class="tiles c2">
-        ${tile('majica', '1', t('yes'), { red: true, mjc: true })}
-        ${tile('majica', '0', t('no'), {})}
-      </div>`
+      <div class="scr-foot"><button class="btn btn-gray" data-act="go" data-v="bag">${esc(t('back'))}</button></div>`
   }),
 
   majicaScan: () => ({
@@ -416,7 +443,7 @@ const VIEWS = {
         <div style="font-size:3.4rem">📡</div>
       </div>
       <div class="scr-foot">
-        <button class="btn btn-gray" data-act="go" data-v="majicaAsk">${esc(t('back'))}</button>
+        <button class="btn btn-gray" data-act="go" data-v="idle">${esc(t('back'))}</button>
         <button class="btn btn-red" data-act="cam" data-v="majica">📷 ${esc(t('cam_majica'))}</button>
         <button class="btn btn-or" data-act="majicaScan">${esc(S.kana ? 'カードを かざす' : 'カードをかざす')}</button>
       </div>`
@@ -430,7 +457,7 @@ const VIEWS = {
         <div class="amt"><div class="lab">${esc(t('money'))}</div><div class="val">${esc(yen(S.majicaMoney))}</div></div>
         <div class="amt"><div class="lab">${esc(t('points'))}</div><div class="val">${S.majicaPoints} P</div></div>
       </div>
-      <div class="scr-foot"><button class="btn btn-or" data-act="go" data-v="scan">${esc(t('confirm'))}</button></div>`
+      <div class="scr-foot"><button class="btn btn-or" data-act="go" data-v="bag">${esc(t('confirm'))}</button></div>`
   }),
 
   scan: () => ({
@@ -669,6 +696,9 @@ function render() {
   const foots = bodyEl.querySelectorAll('.scr-foot');
   if (foots.length) bodyEl.after(foots[foots.length - 1]);
 
+  /* その画面の案内を声で読む。同じ画面を描き直しただけのときは読まない */
+  if (saidScreen !== S.screen) { saidScreen = S.screen; speak(v.say, 420); }
+
   screenEl.className = (v.theme === 'pink' ? 'pink' : '') + (v.fit ? ' fit' : '') + (SELF.on ? ' selfcam' : '');
   document.body.classList.toggle('kana', S.kana);
   const cur = STEP_OF[S.screen];
@@ -687,6 +717,7 @@ function setMode(mode) {
   $('#kanaToggle').hidden = (mode === 'settings');
   $('#soundToggle').hidden = (mode === 'settings');
   $('#selfcamToggle').hidden = (mode !== 'register');
+  saidScreen = null;                 /* 入り直したら最初の案内から読む */
   if (mode === 'register') { render(); openSelfCam(); }
   else { closeSelfCam(); $('#steps').innerHTML = ''; renderApp(); }
 }
@@ -915,7 +946,7 @@ screenEl.addEventListener('click', (ev) => {
     case 'bag':
       sfxTap();
       S.bagChoice = v;
-      go(v === 'paid' ? 'bagsize' : v === 'my' ? 'mybag' : 'majicaAsk');
+      go(v === 'paid' ? 'bagsize' : v === 'my' ? 'mybag' : 'scan');
       break;
 
     case 'addbag': {
@@ -927,7 +958,7 @@ screenEl.addEventListener('click', (ev) => {
     case 'majica':
       sfxTap();
       S.hasMajica = v === '1';
-      go(S.hasMajica ? 'majicaScan' : 'scan');
+      go(S.hasMajica ? 'majicaScan' : 'bag');
       break;
 
     case 'majicaScan': scannerFx('ピッ', () => go('majicaBalance')); break;
