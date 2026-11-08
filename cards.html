@@ -36,8 +36,10 @@
   .card .price { font-size: 13pt; font-weight: 800; color: #c0392b; margin: .8mm 0 1.6mm; }
   .card svg { width: 29mm; height: 29mm; display: block; margin: 0 auto; }
   .card .code { font-size: 6.5pt; color: #888; font-family: ui-monospace, monospace; margin-top: .8mm; }
+  /* A4 1枚に収める。紙の余白は @page 側で取り、本文の padding は 0 にする */
+  @page { size: A4 portrait; margin: 8mm; }
   @media print {
-    body { padding: 8mm; }
+    body { padding: 0; }
     h1, .lead, .bar { display: none; }
   }
 </style>
